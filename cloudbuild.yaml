@@ -1,0 +1,29 @@
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  args:
+  - 'build'
+  - '-t'
+  - 'northamerica-northeast1-docker.pkg.dev/$PROJECT_ID/docker-repo/$REPO_NAME:$COMMIT_SHA'
+  - '.'
+
+- name: 'gcr.io/cloud-builders/docker'
+  args:
+  - 'push'
+  - 'northamerica-northeast1-docker.pkg.dev/$PROJECT_ID/docker-repo/$REPO_NAME:$COMMIT_SHA'
+
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: 'gcloud'
+  args:
+  - 'run'
+  - 'deploy'
+  - '<YOUR_SERVICE_NAME>'
+  - '--image'
+  - 'northamerica-northeast1-docker.pkg.dev/$PROJECT_ID/docker-repo/$REPO_NAME:$COMMIT_SHA'
+  - '--region'
+  - 'northamerica-northeast1'
+  - '--platform'
+  - 'managed'
+  - '--allow-unauthenticated'
+
+substitutions:
+  _REPO_NAME: 'my-service'
