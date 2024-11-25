@@ -14,12 +14,11 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    # Set up Google Cloud CLI
     - name: Setup Google Cloud SDK
       uses: google-github-actions/setup-gcloud@v1
       with:
-        project_id: coen6313proj-442020  # Your Google Cloud Project ID
-        service_account_key: ${{ secrets.GCP_SA_KEY }}  # Service account key added in GitHub secrets
+        project_id: coen6313proj-442020
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
         export_default_credentials: true
 
     # Authenticate Docker with GCR
