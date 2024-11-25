@@ -3,13 +3,13 @@ steps:
   args:
   - 'build'
   - '-t'
-  - 'northamerica-northeast1-docker.pkg.dev/$PROJECT_ID/docker-repo/$REPO_NAME:$COMMIT_SHA'
+  - 'northamerica-northeast1-docker.pkg.dev/coen6313proj-442020/docker-repo/$REPO_NAME:$COMMIT_SHA'
   - '.'
 
 - name: 'gcr.io/cloud-builders/docker'
   args:
   - 'push'
-  - 'northamerica-northeast1-docker.pkg.dev/$PROJECT_ID/docker-repo/$REPO_NAME:$COMMIT_SHA'
+  - 'northamerica-northeast1-docker.pkg.dev/coen6313proj-442020/docker-repo/$REPO_NAME:$COMMIT_SHA'
 
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
   entrypoint: 'gcloud'
@@ -18,7 +18,7 @@ steps:
   - 'deploy'
   - '<YOUR_SERVICE_NAME>'
   - '--image'
-  - 'northamerica-northeast1-docker.pkg.dev/$PROJECT_ID/docker-repo/$REPO_NAME:$COMMIT_SHA'
+  - 'northamerica-northeast1-docker.pkg.dev/coen6313proj-442020/docker-repo/$REPO_NAME:$COMMIT_SHA'
   - '--region'
   - 'northamerica-northeast1'
   - '--platform'
@@ -26,4 +26,4 @@ steps:
   - '--allow-unauthenticated'
 
 substitutions:
-  _REPO_NAME: 'my-service'
+  _REPO_NAME: 'coen6313-docker'
