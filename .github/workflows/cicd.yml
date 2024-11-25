@@ -1,0 +1,46 @@
+name: CI/CD Pipeline for Banking Server
+
+on:
+  push:
+    branches:
+      - main  # Change this to your default branch if different
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    # Checkout the repository
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    # Set up Google Cloud CLI
+    - name: Setup Google Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+      with:
+        project_id: coen6313proj-442020  # Your Google Cloud Project ID
+        service_account_key: ${{ secrets.GCP_SA_KEY }}  # Service account key added in GitHub secrets
+        export_default_credentials: true
+
+    # Authenticate Docker with GCR
+    - name: Authenticate Docker with GCR
+      run: gcloud auth configure-docker
+
+    # Build Docker image
+    - name: Build Docker image
+      run: docker build -t gcr.io/coen6313proj-442020/banking_server:latest .
+
+    # Push Docker image to GCR
+    - name: Push Docker image
+      run: docker push gcr.io/coen6313proj-442020/banking_server:latest
+
+    # Deploy to Google Cloud Run
+    - name: Deploy to Google Cloud Run
+      run: |
+        gcloud run deploy banking-server \
+          --image gcr.io/coen6313proj-442020/banking_server:latest \
+          --platform managed \
+          --region northamerica-northeast1 \
+          --allow-unauthenticated \
+          --memory 32Gi \
+          --cpu 8

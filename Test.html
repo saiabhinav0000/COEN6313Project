@@ -120,6 +120,18 @@
 
             <!-- View Tickets -->
             <button onclick="viewTickets()">View Tickets</button>
+			
+			<!-- Purchase API -->
+			<div class="form-group">
+				<h3>Make a Purchase</h3>
+				<label for="item-id">Item ID</label>
+				<input type="text" id="item-id" placeholder="Enter item ID">
+				
+				<label for="quantity">Quantity</label>
+				<input type="number" id="quantity" placeholder="Enter quantity">
+				
+				<button onclick="makePurchase()">Make Purchase</button>
+			</div>
 
             <!-- Purchase History -->
             <button onclick="viewPurchaseHistory()">Purchase History</button>
@@ -144,6 +156,18 @@
                 <input type="text" id="chatbot-message" placeholder="Message to chatbot">
                 <button onclick="sendChatbotMessage()">Send Message</button>
             </div>
+			
+			<!-- Account ID Input -->
+			<div class="form-group">
+				<label for="account-id">Account ID</label>
+				<input type="text" id="account-id" placeholder="Enter account ID">
+			</div>
+
+			<!-- Buttons for APIs -->
+			<div class="form-group">
+				<button onclick="getPredictedExpenses()">Get Predicted Expenses</button>
+				<button onclick="getActualExpenses()">Get Actual Expenses</button>
+			</div>
         </div>
 
         <!-- Loading Indicator -->
@@ -161,8 +185,8 @@
     </div>
 
     <script>
-        const BASE_URL = "https://banking-server-320930579701.northamerica-northeast1.run.app";
-		//const BASE_URL = "http://127.0.0.1:8080";
+        //const BASE_URL = "https://banking-server-320930579701.northamerica-northeast1.run.app";
+		const BASE_URL = "http://127.0.0.1:8080";
         let token = "";
 
         // Toggle loading indicator
@@ -366,6 +390,36 @@
                 toggleLoading(false);
             }
         }
+		
+		// Make Purchase
+        async function makePurchase() {
+            const itemId = document.getElementById("item-id").value;
+            const quantity = document.getElementById("quantity").value;
+
+            if (!itemId || !quantity) {
+                alert("Please fill in all fields (item ID, quantity).");
+                return;
+            }
+
+            toggleLoading(true);
+            try {
+                const response = await fetch(`${BASE_URL}/purchase`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: token
+                    },
+                    body: JSON.stringify({ item_id: itemId, quantity: parseInt(quantity) })
+                });
+                const data = await handleError(response);
+
+                showResponse(data);
+            } catch (error) {
+                showResponse({ error: error.message });
+            } finally {
+                toggleLoading(false);
+            }
+        }
 
         // View Purchase History
         async function viewPurchaseHistory() {
@@ -443,6 +497,94 @@
             } finally {
                 toggleLoading(false);
             }
+        }
+		
+		// Get Predicted Expenses
+        async function getPredictedExpenses() {
+            const accountId = document.getElementById("account-id").value;
+            if (!accountId) {
+                alert("Please enter an account ID.");
+                return;
+            }
+
+            toggleLoading(true);
+            try {
+                const response = await fetch(`${BASE_URL}/predict-expenses?account_id=${encodeURIComponent(accountId)}`);
+                const data = await handleError(response);
+
+                // Display the response
+                const output = `
+                    Predicted Expenses for Account ID: ${accountId}
+
+                    Total Predicted Expenses Per Month:
+                    ${Object.entries(data.total_predicted_expenses)
+                        .map(([date, expense]) => `${date}: ${expense}`)
+                        .join("\n")}
+
+                    Predicted Expenses by Category:
+                    ${Object.entries(data.predicted_expenses)
+                        .map(([category, predictions]) => `
+                            Category: ${category}
+                            ${Object.entries(predictions)
+                                .map(([date, expense]) => `${date}: ${expense}`)
+                                .join("\n")}`)
+                        .join("\n")}
+                `;
+                showResponse(output);
+            } catch (error) {
+                showResponse({ error: error.message });
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        // Get Actual Expenses
+        async function getActualExpenses() {
+            const accountId = document.getElementById("account-id").value;
+            if (!accountId) {
+                alert("Please enter an account ID.");
+                return;
+            }
+
+            toggleLoading(true);
+            try {
+                const response = await fetch(`${BASE_URL}/actual-expenses?account_id=${encodeURIComponent(accountId)}`);
+                const data = await handleError(response);
+
+                // Display the response
+                const output = `
+                    Actual Expenses for Account ID: ${accountId}
+
+                    Total Actual Expenses Per Month:
+                    ${Object.entries(data.total_actual_expenses)
+                        .map(([date, expense]) => `${date}: ${expense}`)
+                        .join("\n")}
+
+                    Actual Expenses by Category:
+                    ${Object.entries(data.actual_expenses)
+                        .map(([category, expenses]) => `
+                            Category: ${category}
+                            ${Object.entries(expenses)
+                                .map(([date, expense]) => `${date}: ${expense}`)
+                                .join("\n")}`)
+                        .join("\n")}
+                `;
+                showResponse(output);
+            } catch (error) {
+                showResponse({ error: error.message });
+            } finally {
+                toggleLoading(false);
+            }
+        }
+		
+		// Handle error responses
+        function handleError(response) {
+            if (!response.ok) {
+                return response.text().then((text) => {
+                    throw new Error(`Error ${response.status}: ${text}`);
+                });
+            }
+            return response.json();
         }
     </script>
 </body>

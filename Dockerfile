@@ -14,7 +14,11 @@ COPY credentials/coen6313proj-442020-2cc291d18994.json /app/credentials/coen6313
 RUN apt-get update && apt-get install -y libgl1-mesa-glx && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
+RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Set environment variable for multi-threading
+ENV STAN_NUM_THREADS=8
 
 # Expose the port your app runs on
 # EXPOSE 5000

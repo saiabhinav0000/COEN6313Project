@@ -15,6 +15,11 @@ from google.cloud import vision
 import io
 from word2number import w2n
 from flask_cors import CORS
+import pandas as pd
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+import numpy as np
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'E5EEEEEEEEE'  # Replace with a secure key
@@ -26,6 +31,7 @@ tickets_collection = db['tickets']          # New collection for tickets
 accounts_collection = db['accounts']
 shop_collection = db['shop']
 transactions_collection = db['transactions']
+purchase_information_collection = db['purchase_information']
 
 print("Loading DialoGPT-medium model...")
 tokenizer = AutoTokenizer.from_pretrained("microsoft/DialoGPT-medium")
@@ -187,6 +193,59 @@ def token_required(f):
         return f(current_user, *args, **kwargs)
     wrapper.__name__ = f.__name__
     return wrapper
+    
+# Custom Layer for Positional Encoding
+class PositionalEncoding(layers.Layer):
+    def __init__(self, sequence_length, d_model):
+        super(PositionalEncoding, self).__init__()
+        self.pos_encoding = self.positional_encoding(sequence_length, d_model)
+
+    def get_angles(self, position, i, d_model):
+        angle_rates = 1 / np.power(10000, (2 * (i // 2)) / np.float32(d_model))
+        return position * angle_rates
+
+    def positional_encoding(self, position, d_model):
+        angle_rads = self.get_angles(
+            np.arange(position)[:, np.newaxis],
+            np.arange(d_model)[np.newaxis, :],
+            d_model)
+        # Apply sin to even indices in the array; 2i
+        sines = np.sin(angle_rads[:, 0::2])
+        # Apply cos to odd indices in the array; 2i+1
+        cosines = np.cos(angle_rads[:, 1::2])
+        pos_encoding = np.concatenate([sines, cosines], axis=-1)
+        pos_encoding = pos_encoding[np.newaxis, ...]
+        return tf.cast(pos_encoding, dtype=tf.float32)
+
+    def call(self, inputs):
+        return inputs + self.pos_encoding[:, :tf.shape(inputs)[1], :]
+
+# Transformer Encoder Layer
+def transformer_encoder(inputs, num_heads, ff_dim, dropout=0.1):
+    # Normalization and Attention
+    x = layers.LayerNormalization(epsilon=1e-6)(inputs)
+    x = layers.MultiHeadAttention(
+        key_dim=inputs.shape[-1], num_heads=num_heads, dropout=dropout)(x, x)
+    x = layers.Dropout(dropout)(x)
+    res = x + inputs  # Residual connection
+
+    # Feed Forward Part
+    x = layers.LayerNormalization(epsilon=1e-6)(res)
+    x = layers.Dense(ff_dim, activation='relu')(x)
+    x = layers.Dense(inputs.shape[-1])(x)
+    return x + res  # Another residual connection
+
+# Build Transformer Model
+def build_model(input_window, output_window, d_model=64, num_heads=2, ff_dim=128, dropout=0.1):
+    inputs = keras.Input(shape=(input_window, 1))
+    x = layers.Dense(d_model)(inputs)
+    x = PositionalEncoding(sequence_length=input_window, d_model=d_model)(x)
+    x = transformer_encoder(x, num_heads=num_heads, ff_dim=ff_dim, dropout=dropout)
+    x = layers.GlobalAveragePooling1D()(x)
+    x = layers.Dense(output_window * 1)(x)
+    outputs = layers.Reshape((output_window, 1))(x)
+    model = keras.Model(inputs, outputs)
+    return model
 
 @app.route('/register', methods=['POST'])
 def register():
@@ -230,7 +289,186 @@ def login():
     }, app.config['SECRET_KEY'], algorithm="HS256")
 
     return jsonify({'token': token}), 200
+    
+@app.route('/predict-expenses', methods=['GET'])
+def predict_expenses():
+    account_id = request.args.get('account_id')
+    if not account_id:
+        return jsonify({'error': 'account_id parameter is required'}), 400
 
+    # Fetch purchase data for the given account_id
+    purchases = list(purchase_information_collection.find({'account_id': account_id}))
+
+    if not purchases:
+        return jsonify({'error': 'No purchase data found for the given account_id'}), 404
+
+    # Convert data to DataFrame
+    data = pd.DataFrame(purchases)
+
+    # Ensure timestamp field is in datetime format
+    data['timestamp'] = pd.to_datetime(data['timestamp'])
+
+    # Check if 'category' column exists
+    if 'category' not in data.columns:
+        return jsonify({'error': 'No category data found in the purchase information'}), 400
+
+    # Group data by category and month and sum the total_price
+    data['month'] = data['timestamp'].dt.to_period('M')
+    grouped = data.groupby(['category', 'month']).agg({'total_price': 'sum'}).reset_index()
+
+    # Prepare predictions per category
+    predictions_dict = {}
+    total_predictions = None  # To store total predicted expenses per month
+    future_dates = None  # To store future dates for which predictions are made
+
+    for category in grouped['category'].unique():
+        category_data = grouped[grouped['category'] == category]
+        # Ensure there are enough data points
+        if len(category_data) < 12:
+            # Skip categories with less than 12 months of data
+            continue
+
+        # Sort the data by 'month'
+        category_data = category_data.sort_values('month')
+
+        # Convert 'month' to datetime
+        category_data['month'] = category_data['month'].dt.to_timestamp()
+
+        # Get the prices as numpy array
+        prices = category_data['total_price'].values.astype('float32')
+
+        # Define input and output window sizes
+        input_window = 6
+        output_window = 3
+        sequence_length = input_window + output_window
+
+        # Check if we have enough data points
+        if len(prices) < sequence_length:
+            # Skip categories with insufficient data
+            continue
+
+        # Create sequences
+        def create_sequences(data, input_window, output_window):
+            sequences = []
+            for i in range(len(data) - sequence_length + 1):
+                input_seq = data[i:i+input_window]
+                target_seq = data[i+input_window:i+sequence_length]
+                sequences.append((input_seq, target_seq))
+            return sequences
+
+        sequences = create_sequences(prices, input_window, output_window)
+        if not sequences:
+            continue  # Skip if no sequences can be created
+
+        inputs = np.array([s[0] for s in sequences])
+        targets = np.array([s[1] for s in sequences])
+
+        # Reshape inputs and targets
+        inputs = inputs[..., np.newaxis]  # Shape: (num_samples, input_window, 1)
+        targets = targets[..., np.newaxis]  # Shape: (num_samples, output_window, 1)
+
+        # Build the model
+        model = build_model(input_window, output_window)
+
+        # Compile the model
+        model.compile(optimizer='adam', loss='mse')
+
+        # Train the model
+        model.fit(inputs, targets, epochs=50, batch_size=4, verbose=0)
+
+        # Prepare the last input sequence for prediction
+        last_input = prices[-input_window:]
+        last_input = last_input[np.newaxis, ..., np.newaxis]  # Shape: (1, input_window, 1)
+
+        # Predict the next output_window values
+        prediction = model.predict(last_input)
+        predicted_values = prediction[0, :, 0]
+
+        # Prepare future dates
+        last_date = category_data['month'].max()
+        future_dates_category = pd.date_range(start=last_date + pd.offsets.MonthBegin(), periods=output_window, freq='MS')
+
+        # Store future dates (they are the same for all categories)
+        if future_dates is None:
+            future_dates = future_dates_category
+
+        # Prepare the predictions for this category
+        category_predictions = {date.strftime('%Y-%m'): float(value) for date, value in zip(future_dates_category, predicted_values)}
+
+        # Add to the main predictions dictionary
+        predictions_dict[category] = category_predictions
+
+        # Accumulate total predictions
+        if total_predictions is None:
+            # Initialize total_predictions with zeros
+            total_predictions = pd.Series(0.0, index=future_dates_category)
+        total_predictions += pd.Series(predicted_values, index=future_dates_category)
+
+    if not predictions_dict:
+        return jsonify({'error': 'Not enough data to make a prediction for any category (minimum 12 months required per category)'}), 400
+
+    # Prepare total predictions dictionary
+    total_predictions_dict = {date.strftime('%Y-%m'): float(value) for date, value in total_predictions.items()}
+
+    # Prepare the response
+    response = {
+        'account_id': account_id,
+        'predicted_expenses': predictions_dict,
+        'total_predicted_expenses': total_predictions_dict
+    }
+
+    return jsonify(response)
+
+@app.route('/actual-expenses', methods=['GET'])
+def actual_expenses():
+    account_id = request.args.get('account_id')
+    if not account_id:
+        return jsonify({'error': 'account_id parameter is required'}), 400
+
+    # Fetch purchase data for the given account_id
+    purchases = list(purchase_information_collection.find({'account_id': account_id}))
+
+    if not purchases:
+        return jsonify({'error': 'No purchase data found for the given account_id'}), 404
+
+    # Convert data to DataFrame
+    data = pd.DataFrame(purchases)
+
+    # Ensure 'timestamp' and 'category' fields exist
+    if 'timestamp' not in data.columns or 'category' not in data.columns:
+        return jsonify({'error': 'Required fields are missing in the purchase data'}), 400
+
+    # Ensure 'timestamp' field is in datetime format
+    data['timestamp'] = pd.to_datetime(data['timestamp'])
+
+    # Group data by category and month and sum the total_price
+    data['month'] = data['timestamp'].dt.to_period('M')
+    grouped = data.groupby(['category', 'month']).agg({'total_price': 'sum'}).reset_index()
+
+    # Convert 'month' from Period to string for JSON serialization
+    grouped['month'] = grouped['month'].astype(str)
+
+    # Prepare the response
+    actual_expenses_dict = {}
+    for category in grouped['category'].unique():
+        category_data = grouped[grouped['category'] == category]
+        expenses = {row['month']: float(row['total_price']) for index, row in category_data.iterrows()}
+        actual_expenses_dict[category] = expenses
+
+    # Calculate total expenses per month across all categories
+    total_expenses = data.groupby('month').agg({'total_price': 'sum'}).reset_index()
+    total_expenses['month'] = total_expenses['month'].astype(str)
+    total_expenses_dict = {row['month']: float(row['total_price']) for index, row in total_expenses.iterrows()}
+
+    response = {
+        'account_id': account_id,
+        'actual_expenses': actual_expenses_dict,
+        'total_actual_expenses': total_expenses_dict
+    }
+
+    return jsonify(response)
+
+    
 @app.route('/process_cheque', methods=['POST'])
 @token_required
 def process_cheque(current_user):
