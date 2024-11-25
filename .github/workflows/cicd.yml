@@ -10,11 +10,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # Checkout the repository
     - name: Checkout code
       uses: actions/checkout@v3
       
-    # Authenticate with Google Cloud
     - name: Authenticate with Google Cloud
       uses: google-github-actions/auth@v1
       with:
@@ -27,7 +25,6 @@ jobs:
         service_account_key: ${{ secrets.GCP_SA_KEY }}
         export_default_credentials: true
 
-    # Authenticate Docker with GCR
     - name: Authenticate Docker with GCR
       run: gcloud auth configure-docker
     
@@ -37,16 +34,12 @@ jobs:
         gcloud config list
         gcloud projects describe coen6313proj-442020
 
-
-    # Build Docker image
     - name: Build Docker image
       run: docker build -t gcr.io/coen6313proj-442020/banking_server:latest .
 
-    # Push Docker image to GCR
     - name: Push Docker image
       run: docker push gcr.io/coen6313proj-442020/banking_server:latest
 
-    # Deploy to Google Cloud Run
     - name: Deploy to Google Cloud Run
       run: |
         gcloud run deploy banking-server \
