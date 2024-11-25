@@ -25,6 +25,13 @@ jobs:
     # Authenticate Docker with GCR
     - name: Authenticate Docker with GCR
       run: gcloud auth configure-docker
+    
+    - name: Debug Authentication
+      run: |
+        gcloud auth list
+        gcloud config list
+        gcloud projects describe coen6313proj-442020
+
 
     # Build Docker image
     - name: Build Docker image
