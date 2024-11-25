@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Banking API Tester</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 600px; margin: auto; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; }
+        input, button, select, textarea {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        button { background-color: #007bff; color: white; border: none; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        .hidden { display: none; }
+        .response { margin-top: 20px; }
+        .loading { text-align: center; font-size: 18px; color: #555; }
+        .spinner {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border: 4px solid #007bff;
+            border-radius: 50%;
+            border-top: 4px solid transparent;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Smart Banking API Tester</h1>
+        <p><strong>Step 1:</strong> Register or log in to get started.</p>
+
+        <!-- Registration Form -->
+        <div id="register-form">
+            <h2>Register</h2>
+            <div class="form-group">
+                <label for="register-name">Name</label>
+                <input type="text" id="register-name" placeholder="Enter your name">
+            </div>
+            <div class="form-group">
+                <label for="register-email">Email</label>
+                <input type="email" id="register-email" placeholder="Enter your email">
+            </div>
+            <div class="form-group">
+                <label for="register-password">Password</label>
+                <input type="password" id="register-password" placeholder="Enter your password">
+            </div>
+            <div class="form-group">
+                <label for="register-signature">Signature File</label>
+                <input type="file" id="register-signature">
+            </div>
+            <button onclick="register()">Register</button>
+        </div>
+
+        <!-- Login Form -->
+        <div id="login-form">
+            <h2>Login</h2>
+            <div class="form-group">
+                <label for="login-email">Email</label>
+                <input type="email" id="login-email" placeholder="Enter your email">
+            </div>
+            <div class="form-group">
+                <label for="login-password">Password</label>
+                <input type="password" id="login-password" placeholder="Enter your password">
+            </div>
+            <button onclick="login()">Login</button>
+        </div>
+
+        <!-- Test APIs Section -->
+        <div id="api-tester" class="hidden">
+            <h2>Test APIs</h2>
+            <p><strong>Step 2:</strong> Use the available APIs below:</p>
+
+            <!-- Check Balance -->
+            <button onclick="checkBalance()">Check Balance</button>
+
+            <!-- Deposit -->
+            <div class="form-group">
+                <label for="deposit-amount">Deposit Amount</label>
+                <input type="number" id="deposit-amount" placeholder="Enter amount">
+                <button onclick="deposit()">Deposit</button>
+            </div>
+
+            <!-- Withdraw -->
+            <div class="form-group">
+                <label for="withdraw-amount">Withdraw Amount</label>
+                <input type="number" id="withdraw-amount" placeholder="Enter amount">
+                <button onclick="withdraw()">Withdraw</button>
+            </div>
+
+            <!-- Transaction History -->
+            <button onclick="getTransactionHistory()">Transaction History</button>
+
+            <!-- Transfer -->
+            <div class="form-group">
+                <label for="transfer-amount">Transfer Amount</label>
+                <input type="number" id="transfer-amount" placeholder="Enter amount">
+                <label for="to-email">Recipient Email</label>
+                <input type="email" id="to-email" placeholder="Recipient Email">
+                <button onclick="transfer()">Transfer</button>
+            </div>
+
+            <!-- Create Ticket -->
+            <div class="form-group">
+                <label for="ticket-description">Issue Description</label>
+                <textarea id="ticket-description" placeholder="Describe your issue"></textarea>
+                <button onclick="createTicket()">Create Ticket</button>
+            </div>
+
+            <!-- View Tickets -->
+            <button onclick="viewTickets()">View Tickets</button>
+
+            <!-- Purchase History -->
+            <button onclick="viewPurchaseHistory()">Purchase History</button>
+
+            <!-- Shop -->
+            <button onclick="viewShop()">Shop</button>
+
+            <!-- Process Cheque -->
+			<div class="form-group">
+                <label for="cheque-image">Cheque Image</label>
+                <input type="file" id="cheque-image">
+            </div>
+            <div class="form-group">
+                <label for="signature-image">Signature Image</label>
+                <input type="file" id="signature-image">
+            </div>
+            <button onclick="processCheque()">Process Cheque</button>
+
+            <!-- Chatbot -->
+            <div class="form-group">
+                <label for="chatbot-message">Chatbot Message</label>
+                <input type="text" id="chatbot-message" placeholder="Message to chatbot">
+                <button onclick="sendChatbotMessage()">Send Message</button>
+            </div>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="loading" class="hidden">
+            <p class="loading">
+                <span class="spinner"></span> Processing your request...
+            </p>
+        </div>
+
+        <!-- Server Response -->
+        <div class="response">
+            <h3>Server Response:</h3>
+            <pre id="response"></pre>
+        </div>
+    </div>
+
+    <script>
+        const BASE_URL = "https://banking-server-320930579701.northamerica-northeast1.run.app";
+		//const BASE_URL = "http://127.0.0.1:8080";
+        let token = "";
+
+        // Toggle loading indicator
+        function toggleLoading(show) {
+            const loadingDiv = document.getElementById("loading");
+            if (show) {
+                loadingDiv.classList.remove("hidden");
+            } else {
+                loadingDiv.classList.add("hidden");
+            }
+        }
+
+        // Display server response
+        function showResponse(data) {
+            document.getElementById("response").innerText = JSON.stringify(data, null, 2);
+        }
+
+        // Registration handler
+        async function register() {
+            const name = document.getElementById("register-name").value;
+            const email = document.getElementById("register-email").value;
+            const password = document.getElementById("register-password").value;
+            const signature = document.getElementById("register-signature").files[0];
+
+            const formData = new FormData();
+            formData.append("name", name);
+            formData.append("email", email);
+            formData.append("password", password);
+            formData.append("signature", signature);
+
+            toggleLoading(true);
+            try {
+                const response = await fetch(`${BASE_URL}/register`, { method: "POST", body: formData });
+                const data = await response.json();
+                showResponse(data);
+                if (response.ok) alert("Registration successful! Please log in.");
+            } catch (error) {
+                showResponse({ error: "Failed to connect to the server." });
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        // Login handler
+        async function login() {
+            const email = document.getElementById("login-email").value;
+            const password = document.getElementById("login-password").value;
+
+            toggleLoading(true);
+            try {
+                const response = await fetch(`${BASE_URL}/login`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await response.json();
+                showResponse(data);
+                if (response.ok) {
+                    token = data.token;
+                    document.getElementById("api-tester").classList.remove("hidden");
+                    alert("Login successful! You can now test APIs.");
+                } else {
+                    alert("Login failed! Please check your credentials.");
+                }
+            } catch (error) {
+                showResponse({ error: "Failed to connect to the server." });
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        // Check Balance
+        async function checkBalance() {
+            toggleLoading(true);
+            try {
+                const response = await fetch(`${BASE_URL}/balance`, {
+                    method: "GET",
+                    headers: { Authorization: token }
+                });
+                const data = await response.json();
+                showResponse(data);
+            } catch (error) {
+                showResponse({ error: "Failed to connect to the server." });
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        // Deposit
+        async function deposit() {
+            const amount = document.getElementById("deposit-amount").value;
+
+            toggleLoading(true);
+            try {
+                const response = await fetch(`${BASE_URL}/deposit`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", Authorization: token },
+                    body: JSON.stringify({ amount: parseFloat(amount) })
+                });
+                const data = await response.json();
+                showResponse(data);
+            } catch (error) {
+                showResponse({ error: "Failed to connect to the server." });
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        // Withdraw
+        async function withdraw() {
+            const amount = document.getElementById("withdraw-amount").value;
+
+            toggleLoading(true);
+            try {
+                const response = await fetch(`${BASE_URL}/withdraw`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", Authorization: token },
+                    body: JSON.stringify({ amount: parseFloat(amount) })
+                });
+                const data = await response.json();
+                showResponse(data);
+            } catch (error) {
+                showResponse({ error: "Failed to connect to the server." });
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        // Transaction History
+        async function getTransactionHistory() {
+            toggleLoading(true);
+            try {
+                const response = await fetch(`${BASE_URL}/transaction_history`, {
+                    method: "GET",
+                    headers: { Authorization: token }
+                });
+                const data = await response.json();
+                showResponse(data);
+            } catch (error) {
+                showResponse({ error: "Failed to connect to the server." });
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        // Transfer
+        async function transfer() {
+            const amount = document.getElementById("transfer-amount").value;
+            const toEmail = document.getElementById("to-email").value;
+
+            toggleLoading(true);
+            try {
+                const response = await fetch(`${BASE_URL}/transfer`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", Authorization: token },
+                    body: JSON.stringify({ amount: parseFloat(amount), to_account_email: toEmail })
+                });
+                const data = await response.json();
+                showResponse(data);
+            } catch (error) {
+                showResponse({ error: "Failed to connect to the server." });
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        // Create Ticket
+        async function createTicket() {
+            const description = document.getElementById("ticket-description").value;
+
+            toggleLoading(true);
+            try {
+                const response = await fetch(`${BASE_URL}/chatbot`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", Authorization: token },
+                    body: JSON.stringify({ message: `create a ticket: ${description}` })
+                });
+                const data = await response.json();
+                showResponse(data);
+            } catch (error) {
+                showResponse({ error: "Failed to connect to the server." });
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        // View Tickets
+        async function viewTickets() {
+            toggleLoading(true);
+            try {
+                const response = await fetch(`${BASE_URL}/chatbot`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", Authorization: token },
+                    body: JSON.stringify({ message: "view my tickets" })
+                });
+                const data = await response.json();
+                showResponse(data);
+            } catch (error) {
+                showResponse({ error: "Failed to connect to the server." });
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        // View Purchase History
+        async function viewPurchaseHistory() {
+            toggleLoading(true);
+            try {
+                const response = await fetch(`${BASE_URL}/purchase_history`, {
+                    method: "GET",
+                    headers: { Authorization: token }
+                });
+                const data = await response.json();
+                showResponse(data);
+            } catch (error) {
+                showResponse({ error: "Failed to connect to the server." });
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        // View Shop
+        async function viewShop() {
+            toggleLoading(true);
+            try {
+                const response = await fetch(`${BASE_URL}/shop`, {
+                    method: "GET",
+                    headers: { Authorization: token }
+                });
+                const data = await response.json();
+                showResponse(data);
+            } catch (error) {
+                showResponse({ error: "Failed to connect to the server." });
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        async function processCheque() {
+            const chequeImage = document.getElementById("cheque-image").files[0];
+            const signatureImage = document.getElementById("signature-image").files[0];
+
+            const formData = new FormData();
+            formData.append("cheque", chequeImage);
+            formData.append("signature", signatureImage);
+
+            toggleLoading(true);
+            try {
+                const response = await fetch(`${BASE_URL}/process_cheque`, {
+                    method: "POST",
+                    headers: { Authorization: token },
+                    body: formData
+                });
+                const data = await response.json();
+                showResponse(data);
+            } catch (error) {
+                showResponse({ error: "Failed to connect to the server." });
+            } finally {
+                toggleLoading(false);
+            }
+        }
+
+        // Chatbot
+        async function sendChatbotMessage() {
+            const message = document.getElementById("chatbot-message").value;
+
+            toggleLoading(true);
+            try {
+                const response = await fetch(`${BASE_URL}/chatbot`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", Authorization: token },
+                    body: JSON.stringify({ message })
+                });
+                const data = await response.json();
+                showResponse(data);
+            } catch (error) {
+                showResponse({ error: "Failed to connect to the server." });
+            } finally {
+                toggleLoading(false);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+flask
+pymongo
+bcrypt
+PyJWT
+pillow
+torch
+transformers
+google-cloud-vision
+word2number
+flask-cors
