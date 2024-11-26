@@ -180,13 +180,15 @@
         <!-- Server Response -->
         <div class="response">
             <h3>Server Response:</h3>
-            <pre id="response"></pre>
+            <div id="response" style="overflow: auto; max-height: 400px; background: #f1f1f1; padding: 10px; border: 1px solid #ccc; border-radius: 5px;">
+                <!-- Server response will be rendered here -->
+            </div>
         </div>
     </div>
 
     <script>
-        //const BASE_URL = "https://banking-server-320930579701.northamerica-northeast1.run.app";
-		const BASE_URL = "http://127.0.0.1:8080";
+          const BASE_URL = "https://banking-server-320930579701.northamerica-northeast1.run.app";
+		//const BASE_URL = "http://127.0.0.1:8080";
         let token = "";
 
         // Toggle loading indicator
@@ -199,10 +201,54 @@
             }
         }
 
-        // Display server response
-        function showResponse(data) {
-            document.getElementById("response").innerText = JSON.stringify(data, null, 2);
-        }
+        // Display server response with proper formatting
+function showResponse(data) {
+    const responseContainer = document.getElementById("response");
+    // Clear any existing content
+    responseContainer.innerHTML = "";
+
+    if (typeof data === "object") {
+        // Format JSON objects into a table-like view
+        responseContainer.appendChild(createResponseTable(data));
+    } else {
+        // Display raw data if not an object
+        responseContainer.innerText = data;
+    }
+}
+
+// Helper function to create a table from JSON data
+function createResponseTable(data) {
+    const table = document.createElement("table");
+    table.style.width = "100%";
+    table.style.borderCollapse = "collapse";
+
+    // Add table rows
+    Object.entries(data).forEach(([key, value]) => {
+        const row = document.createElement("tr");
+
+        // Key column
+        const keyCell = document.createElement("td");
+        keyCell.style.border = "1px solid #ccc";
+        keyCell.style.padding = "8px";
+        keyCell.style.fontWeight = "bold";
+        keyCell.style.backgroundColor = "#f9f9f9";
+        keyCell.textContent = key;
+        row.appendChild(keyCell);
+
+        // Value column
+        const valueCell = document.createElement("td");
+        valueCell.style.border = "1px solid #ccc";
+        valueCell.style.padding = "8px";
+        valueCell.textContent =
+            typeof value === "object" ? JSON.stringify(value, null, 2) : value;
+        row.appendChild(valueCell);
+
+        table.appendChild(row);
+    });
+
+    return table;
+}
+
 
         // Registration handler
         async function register() {
