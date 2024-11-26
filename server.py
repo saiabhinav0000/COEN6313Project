@@ -648,19 +648,26 @@ def transfer(current_user):
 @app.route('/transaction_history', methods=['GET'])
 @token_required
 def transaction_history(current_user):
-    account_id = str(current_user['_id'])
+    account_id = current_user['_id']  # Assuming current_user['_id'] is already an ObjectId
 
-    transactions = list(transactions_collection.find({"account_id": ObjectId(account_id)}).sort("timestamp", -1))
-    
+    # Fetch transactions for the current user's account, sorted by timestamp (descending)
+    transactions = list(transactions_collection.find({"account_id": account_id}).sort("timestamp", -1))
+
+    # Convert ObjectId and datetime fields to JSON serializable types
     for transaction in transactions:
+        # Convert ObjectId fields to strings
         transaction['_id'] = str(transaction['_id'])
         transaction['account_id'] = str(transaction['account_id'])
         if "to_account_id" in transaction:
             transaction["to_account_id"] = str(transaction["to_account_id"])
         if "from_account_id" in transaction:
             transaction["from_account_id"] = str(transaction["from_account_id"])
-        transaction['timestamp'] = transaction['timestamp'].isoformat()
+        
+        # Convert timestamp to ISO 8601 string
+        if "timestamp" in transaction and isinstance(transaction['timestamp'], datetime):
+            transaction['timestamp'] = transaction['timestamp'].isoformat()
 
+    # Return JSON response with transactions or an empty list
     return jsonify({'transaction_history': transactions or []}), 200
 
 @app.route('/chatbot', methods=['POST'])
